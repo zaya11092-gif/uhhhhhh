@@ -56,12 +56,13 @@
         <button id="stop">Stop VM</button>
         <button id="connect_vnc">Connect to VNC (if VM has VNC server on localhost:5900)</button>
     </div>
+    <div id="status"></div>
     <div id="screen_container">
         <canvas id="screen" width="640" height="480"></canvas>
     </div>
     <div id="terminal"></div>
     <div id="vnc_container"></div>
-    <script src="https://copy.sh/v86/v86.js"></script>
+    <script src="https://copy.sh/v86/build/v86.js"></script>
     <script src="https://novnc.com/noVNC/vnc.js"></script>
     <script>
         const screenContainer = document.getElementById('screen_container');
@@ -72,6 +73,7 @@
         const startBtn = document.getElementById('start');
         const stopBtn = document.getElementById('stop');
         const connectVncBtn = document.getElementById('connect_vnc');
+        const status = document.getElementById('status');
 
         let emulator;
         let rfb;
@@ -81,20 +83,26 @@
             if (emulator) {
                 emulator.stop();
             }
+            status.textContent = "Starting VM...";
             if (!file) {
                 // Boot default kernel with terminal
                 screenContainer.style.display = 'none';
                 terminal.style.display = 'block';
                 vncContainer.style.display = 'none';
-                emulator = new V86({
-                    serial: terminal,
-                    memory_size: 2048 * 1024 * 1024, // 2048 MB
-                    vga_memory_size: 128 * 1024 * 1024, // 128 MB
-                    bzimage: { url: "https://copy.sh/v86/images/bzImage" },
-                    initrd: { url: "https://copy.sh/v86/images/initrd" },
-                    cmdline: "console=ttyS0",
-                    autostart: true,
-                });
+                try {
+                    emulator = new V86({
+                        serial: [{ mode: 'terminal', container: terminal }],
+                        memory_size: 2048 * 1024 * 1024, // 2048 MB
+                        vga_memory_size: 128 * 1024 * 1024, // 128 MB
+                        bzimage: { url: "https://copy.sh/v86/images/bzImage" },
+                        initrd: { url: "https://copy.sh/v86/images/initrd" },
+                        cmdline: "console=ttyS0",
+                        autostart: true,
+                    });
+                    status.textContent = "VM started (default kernel)";
+                } catch (e) {
+                    status.textContent = "Error starting VM: " + e;
+                }
             } else {
                 // Boot from ISO
                 screenContainer.style.display = 'block';
@@ -103,13 +111,18 @@
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const buffer = e.target.result;
-                    emulator = new V86({
-                        screen_container: screenContainer,
-                        memory_size: 2048 * 1024 * 1024, // 2048 MB
-                        vga_memory_size: 128 * 1024 * 1024, // 128 MB
-                        cdrom: { buffer: buffer },
-                        autostart: true,
-                    });
+                    try {
+                        emulator = new V86({
+                            screen_container: screenContainer,
+                            memory_size: 2048 * 1024 * 1024, // 2048 MB
+                            vga_memory_size: 128 * 1024 * 1024, // 128 MB
+                            cdrom: { buffer: buffer },
+                            autostart: true,
+                        });
+                        status.textContent = "VM started (from ISO)";
+                    } catch (e) {
+                        status.textContent = "Error starting VM: " + e;
+                    }
                 };
                 reader.readAsArrayBuffer(file);
             }
@@ -127,6 +140,7 @@
             screenContainer.style.display = 'block';
             terminal.style.display = 'none';
             vncContainer.style.display = 'none';
+            status.textContent = "VM stopped";
         };
 
         connectVncBtn.onclick = () => {
