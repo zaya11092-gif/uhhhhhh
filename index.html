@@ -15,6 +15,24 @@
             display: inline-block;
             margin-bottom: 20px;
         }
+        #terminal {
+            border: 1px solid #ccc;
+            background: black;
+            color: white;
+            font-family: monospace;
+            padding: 10px;
+            height: 400px;
+            overflow-y: auto;
+            display: none;
+            margin-bottom: 20px;
+        }
+        #vnc_container {
+            border: 1px solid #ccc;
+            width: 640px;
+            height: 480px;
+            display: none;
+            margin-bottom: 20px;
+        }
         #controls {
             margin-bottom: 20px;
         }
@@ -31,45 +49,70 @@
 <body>
     <h1>In-Browser x86 Virtual Machine</h1>
     <p>Upload a .iso file and start the virtual machine. Specs: 2048 MB RAM, 128 MB Video Memory.</p>
+    <p>If no ISO is selected, boots to a default terminal/kernel for basic content management.</p>
     <div id="controls">
         <input type="file" id="iso" accept=".iso">
         <button id="start">Start VM</button>
         <button id="stop">Stop VM</button>
+        <button id="connect_vnc">Connect to VNC (if VM has VNC server on localhost:5900)</button>
     </div>
     <div id="screen_container">
         <canvas id="screen" width="640" height="480"></canvas>
     </div>
+    <div id="terminal"></div>
+    <div id="vnc_container"></div>
     <script src="https://copy.sh/v86/v86.js"></script>
+    <script src="https://novnc.com/noVNC/vnc.js"></script>
     <script>
         const screenContainer = document.getElementById('screen_container');
         const screen = document.getElementById('screen');
+        const terminal = document.getElementById('terminal');
+        const vncContainer = document.getElementById('vnc_container');
         const isoInput = document.getElementById('iso');
         const startBtn = document.getElementById('start');
         const stopBtn = document.getElementById('stop');
+        const connectVncBtn = document.getElementById('connect_vnc');
 
         let emulator;
+        let rfb;
 
         startBtn.onclick = () => {
             const file = isoInput.files[0];
-            if (!file) {
-                alert('Please select an ISO file first.');
-                return;
-            }
             if (emulator) {
                 emulator.stop();
             }
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const buffer = e.target.result;
+            if (!file) {
+                // Boot default kernel with terminal
+                screenContainer.style.display = 'none';
+                terminal.style.display = 'block';
+                vncContainer.style.display = 'none';
                 emulator = new V86({
-                    screen_container: screenContainer,
+                    serial: terminal,
                     memory_size: 2048 * 1024 * 1024, // 2048 MB
                     vga_memory_size: 128 * 1024 * 1024, // 128 MB
-                    cdrom: { buffer: buffer },
+                    bzimage: { url: "https://copy.sh/v86/images/bzImage" },
+                    initrd: { url: "https://copy.sh/v86/images/initrd" },
+                    cmdline: "console=ttyS0",
                     autostart: true,
                 });
-            };
-            reader.readAsArrayBuffer(file);
+            } else {
+                // Boot from ISO
+                screenContainer.style.display = 'block';
+                terminal.style.display = 'none';
+                vncContainer.style.display = 'none';
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const buffer = e.target.result;
+                    emulator = new V86({
+                        screen_container: screenContainer,
+                        memory_size: 2048 * 1024 * 1024, // 2048 MB
+                        vga_memory_size: 128 * 1024 * 1024, // 128 MB
+                        cdrom: { buffer: buffer },
+                        autostart: true,
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            }
         };
 
         stopBtn.onclick = () => {
@@ -77,9 +120,26 @@
                 emulator.stop();
                 emulator = null;
             }
+            if (rfb) {
+                rfb.disconnect();
+                rfb = null;
+            }
+            screenContainer.style.display = 'block';
+            terminal.style.display = 'none';
+            vncContainer.style.display = 'none';
         };
 
-        // Handle keyboard input
+        connectVncBtn.onclick = () => {
+            if (rfb) {
+                rfb.disconnect();
+            }
+            screenContainer.style.display = 'none';
+            terminal.style.display = 'none';
+            vncContainer.style.display = 'block';
+            rfb = new RFB(vncContainer, 'ws://localhost:5900');
+        };
+
+        // Handle keyboard input for emulator
         document.addEventListener('keydown', (e) => {
             if (emulator) {
                 emulator.keyboard_send_scancodes([e.keyCode]);
