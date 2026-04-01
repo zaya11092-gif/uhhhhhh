@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>In-Browser x86 Virtual Machine</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        #screen_container {
+            border: 1px solid #ccc;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+        #controls {
+            margin-bottom: 20px;
+        }
+        button {
+            margin-right: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        input[type="file"] {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>In-Browser x86 Virtual Machine</h1>
+    <p>Upload a .iso file and start the virtual machine. Specs: 2048 MB RAM, 128 MB Video Memory.</p>
+    <div id="controls">
+        <input type="file" id="iso" accept=".iso">
+        <button id="start">Start VM</button>
+        <button id="stop">Stop VM</button>
+    </div>
+    <div id="screen_container">
+        <canvas id="screen" width="640" height="480"></canvas>
+    </div>
+    <script src="https://copy.sh/v86/v86.js"></script>
+    <script>
+        const screenContainer = document.getElementById('screen_container');
+        const screen = document.getElementById('screen');
+        const isoInput = document.getElementById('iso');
+        const startBtn = document.getElementById('start');
+        const stopBtn = document.getElementById('stop');
+
+        let emulator;
+
+        startBtn.onclick = () => {
+            const file = isoInput.files[0];
+            if (!file) {
+                alert('Please select an ISO file first.');
+                return;
+            }
+            if (emulator) {
+                emulator.stop();
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const buffer = e.target.result;
+                emulator = new V86({
+                    screen_container: screenContainer,
+                    memory_size: 2048 * 1024 * 1024, // 2048 MB
+                    vga_memory_size: 128 * 1024 * 1024, // 128 MB
+                    cdrom: { buffer: buffer },
+                    autostart: true,
+                });
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        stopBtn.onclick = () => {
+            if (emulator) {
+                emulator.stop();
+                emulator = null;
+            }
+        };
+
+        // Handle keyboard input
+        document.addEventListener('keydown', (e) => {
+            if (emulator) {
+                emulator.keyboard_send_scancodes([e.keyCode]);
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (emulator) {
+                emulator.keyboard_send_scancodes([0x80 | e.keyCode]); // Release
+            }
+        });
+    </script>
+</body>
+</html>
